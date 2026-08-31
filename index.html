@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador: Single-Thread vs Multi-Thread</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --accent-single: #38bdf8;
+            --accent-multi: #4ade80;
+            --border: #334155;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { margin-bottom: 5px; font-size: 1.5rem; text-align: center; }
+        .subtitle { color: #94a3b8; font-size: 0.9rem; margin-bottom: 25px; text-align: center; }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 900px;
+        }
+        .server-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .server-card h2 { margin: 0; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; }
+        .single h2 { color: var(--accent-single); }
+        .multi h2 { color: var(--accent-multi); }
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: #2563eb; }
+        .queue-container {
+            background-color: #090d16;
+            border-radius: 8px;
+            padding: 10px;
+            min-height: 150px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border: 1px solid var(--border);
+        }
+        .request-item {
+            background-color: #334155;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: fadeIn 0.3s ease;
+        }
+        .request-item.processing { background-color: #1e3a8a; border-left: 4px solid var(--accent-single); }
+        .request-item.completed { background-color: #064e3b; border-left: 4px solid var(--accent-multi); }
+        .metrics {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            display: flex;
+            justify-content: space-between;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @media (max-width: 768px) {
+            .container { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Simulador de Servidores</h1>
+    <div class="subtitle">Comparação visual do comportamento de requisições simultâneas</div>
+
+    <div class="container">
+        <!-- Servidor Single-Thread -->
+        <div class="server-card single">
+            <h2>⚙️ Single-Thread (Fila Única)</h2>
+            <p style="font-size: 0.85rem; color: #94a3b8; margin: 0;">Processa uma requisição pesada por vez. As outras aguardam liberarem a thread.</p>
+            <button onclick="startSingleThreadTest()">Enviar 4 Requisições</button>
+            <div class="metrics">
+                <span id="single-status">Status: Ocioso</span>
+                <span id="single-time">Tempo Total: 0s</span>
+            </div>
+            <div class="queue-container" id="single-queue"></div>
+        </div>
+
+        <!-- Servidor Multi-Thread -->
+        <div class="server-card multi">
+            <h2>⚡ Multi-Thread (Paralelo)</h2>
+            <p style="font-size: 0.85rem; color: #94a3b8; margin: 0;">Cria uma linha de execução dedicada para cada requisição simultânea.</p>
+            <button onclick="startMultiThreadTest()" style="background-color: #10b981;">Enviar 4 Requisições</button>
+            <div class="metrics">
+                <span id="multi-status">Status: Ocioso</span>
+                <span id="multi-time">Tempo Total: 0s</span>
+            </div>
+            <div class="queue-container" id="multi-queue"></div>
+        </div>
+    </div>
+
+    <script>
+        // Função auxiliar para simular atraso de processamento
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        async function startSingleThreadTest() {
+            const queueEl = document.getElementById('single-queue');
+            const statusEl = document.getElementById('single-status');
+            const timeEl = document.getElementById('single-time');
+            queueEl.innerHTML = '';
+            
+            statusEl.innerText = "Status: Processando...";
+            const startTime = performance.now();
+
+            // Criar 4 requisições na interface
+            const requests = [1, 2, 3, 4].map(id => {
+                const div = document.createElement('div');
+                div.className = 'request-item';
+                div.id = `single-req-${id}`;
+                div.innerHTML = `<span>Req #${id} (Pesada)</span><span>Na fila</span>`;
+                queueEl.appendChild(div);
+                return id;
+            });
+
+            // Processamento sequencial (Single-Thread simulando bloqueio)
+            for (let id of requests) {
+                const reqDiv = document.getElementById(`single-req-${id}`);
+                reqDiv.className = 'request-item processing';
+                reqDiv.innerHTML = `<span>Req #${id} (Pesada)</span><span>Processando...</span>`;
+                
+                await sleep(2000); // Cada requisição leva 2 segundos bloqueando a thread
+
+                reqDiv.className = 'request-item completed';
+                reqDiv.innerHTML = `<span>Req #${id} (Pesada)</span><span>Concluído</span>`;
+            }
+
+            const endTime = performance.now();
+            statusEl.innerText = "Status: Concluído";
+            timeEl.innerText = `Tempo Total: ((endTime - startTime) / 1000).toFixed(1)s`;
+        }
+
+        async function startMultiThreadTest() {
+            const queueEl = document.getElementById('multi-queue');
+            const statusEl = document.getElementById('multi-status');
+            const timeEl = document.getElementById('multi-time');
+            queueEl.innerHTML = '';
+            
+            statusEl.innerText = "Status: Processando em paralelo...";
+            const startTime = performance.now();
+
+            const requests = [1, 2, 3, 4].map(id => {
+                const div = document.createElement('div');
+                div.className = 'request-item';
+                div.id = `multi-req-${id}`;
+                div.innerHTML = `<span>Req #${id} (Paralela)</span><span>Iniciando thread</span>`;
+                queueEl.appendChild(div);
+                return id;
+            });
+
+            // Processamento concorrente (Multi-Thread rodando ao mesmo tempo)
+            const promises = requests.map(async (id) => {
+                const reqDiv = document.getElementById(`multi-req-${id}`);
+                reqDiv.className = 'request-item processing';
+                reqDiv.innerHTML = `<span>Req #${id} (Paralela)</span><span>Processando...</span>`;
+                
+                await sleep(2000); // Todas rodam simultaneamente por 2 segundos
+
+                reqDiv.className = 'request-item completed';
+                reqDiv.innerHTML = `<span>Req #${id} (Paralela)</span><span>Concluído</span>`;
+            });
+
+            await Promise.all(promises);
+
+            const endTime = performance.now();
+            statusEl.innerText = "Status: Concluído";
+            timeEl.innerText = `Tempo Total: ((endTime - startTime) / 1000).toFixed(1)s`;
+        }
+    </script>
+</body>
+</html>
